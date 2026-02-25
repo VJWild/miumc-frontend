@@ -7,81 +7,84 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+-- 🌟 REINICIO LIMPIO: Borra la base de datos vieja para forzar la creación desde cero
+DROP DATABASE IF EXISTS miumc_db;
+
 -- 1. Crear Base de Datos
-CREATE DATABASE IF NOT EXISTS miumc_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE miumc_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE miumc_db;
 
 -- 2. Tabla de Carreras
-CREATE TABLE IF NOT EXISTS careers (
-                                       id INT AUTO_INCREMENT PRIMARY KEY,
-                                       name VARCHAR(100) NOT NULL UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
+CREATE TABLE careers (
+                         id INT AUTO_INCREMENT PRIMARY KEY,
+                         code VARCHAR(10) NOT NULL UNIQUE, -- 🌟 CORREGIDO: Se agregó la columna code
+                         name VARCHAR(100) NOT NULL UNIQUE,
+                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
 -- 3. Tabla de Menciones
-CREATE TABLE IF NOT EXISTS specializations (
-                                               id INT AUTO_INCREMENT PRIMARY KEY,
-                                               career_id INT NOT NULL,
-                                               name VARCHAR(100) NOT NULL,
-    FOREIGN KEY (career_id) REFERENCES careers(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB;
+CREATE TABLE specializations (
+                                 id INT AUTO_INCREMENT PRIMARY KEY,
+                                 career_id INT NOT NULL,
+                                 name VARCHAR(100) NOT NULL,
+                                 FOREIGN KEY (career_id) REFERENCES careers(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
--- 4. Tabla de Usuarios
-CREATE TABLE IF NOT EXISTS users (
-                                     id INT AUTO_INCREMENT PRIMARY KEY,
-                                     student_code VARCHAR(20) NOT NULL UNIQUE,
-    full_name VARCHAR(150) NOT NULL,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    phone VARCHAR(20) DEFAULT 'Sin teléfono',
-    password_hash VARCHAR(255) NOT NULL,
-    age INT,
-    birth_date DATE,
-    career_id INT,
-    specialization_id INT,
-    role ENUM('cadete', 'admin') DEFAULT 'cadete',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (career_id) REFERENCES careers(id),
-    FOREIGN KEY (specialization_id) REFERENCES specializations(id)
-    ) ENGINE=InnoDB;
+-- 4. Tabla de Usuarios (CON TELÉFONO)
+CREATE TABLE users (
+                       id INT AUTO_INCREMENT PRIMARY KEY,
+                       student_code VARCHAR(20) NOT NULL UNIQUE,
+                       full_name VARCHAR(150) NOT NULL,
+                       email VARCHAR(100) NOT NULL UNIQUE,
+                       phone VARCHAR(20) DEFAULT 'Sin teléfono',
+                       password_hash VARCHAR(255) NOT NULL,
+                       age INT,
+                       birth_date DATE,
+                       career_id INT,
+                       specialization_id INT,
+                       role ENUM('cadete', 'admin') DEFAULT 'cadete',
+                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                       FOREIGN KEY (career_id) REFERENCES careers(id),
+                       FOREIGN KEY (specialization_id) REFERENCES specializations(id)
+) ENGINE=InnoDB;
 
 -- 5. Tabla de Materias (Pensum)
-CREATE TABLE IF NOT EXISTS subjects (
-                                        id INT AUTO_INCREMENT PRIMARY KEY,
-                                        code VARCHAR(15) NOT NULL UNIQUE,
-    name VARCHAR(200) NOT NULL,
-    uc INT NOT NULL,
-    semester INT NOT NULL,
-    prelacion_text TEXT,
-    specialization_id INT DEFAULT NULL, -- NULL si es común (Todas)
-    type ENUM('Obligatoria', 'Electiva') DEFAULT 'Obligatoria',
-    FOREIGN KEY (specialization_id) REFERENCES specializations(id)
-    ) ENGINE=InnoDB;
+CREATE TABLE subjects (
+                          id INT AUTO_INCREMENT PRIMARY KEY,
+                          code VARCHAR(15) NOT NULL UNIQUE,
+                          name VARCHAR(200) NOT NULL,
+                          uc INT NOT NULL,
+                          semester INT NOT NULL,
+                          prelacion_text TEXT,
+                          specialization_id INT DEFAULT NULL, -- NULL si es común (Todas)
+                          type ENUM('Obligatoria', 'Electiva') DEFAULT 'Obligatoria',
+                          FOREIGN KEY (specialization_id) REFERENCES specializations(id)
+) ENGINE=InnoDB;
 
 -- 6. Tabla de Récord Académico
-CREATE TABLE IF NOT EXISTS academic_records (
-                                                id INT AUTO_INCREMENT PRIMARY KEY,
-                                                user_id INT NOT NULL,
-                                                subject_id INT NOT NULL,
-                                                grade DECIMAL(4,2) DEFAULT NULL,
-    status ENUM('aprobada', 'reprobada', 'en_curso') DEFAULT 'aprobada',
-    approved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_user_subject (user_id, subject_id)
-    ) ENGINE=InnoDB;
+CREATE TABLE academic_records (
+                                  id INT AUTO_INCREMENT PRIMARY KEY,
+                                  user_id INT NOT NULL,
+                                  subject_id INT NOT NULL,
+                                  grade DECIMAL(4,2) DEFAULT NULL,
+                                  status ENUM('aprobada', 'reprobada', 'en_curso') DEFAULT 'aprobada',
+                                  approved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                                  FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+                                  UNIQUE KEY unique_user_subject (user_id, subject_id)
+) ENGINE=InnoDB;
 
--- 7. TABLA DE INSCRIPCIONES
-CREATE TABLE IF NOT EXISTS enrollments (
-                                           id INT AUTO_INCREMENT PRIMARY KEY,
-                                           user_id INT NOT NULL,
-                                           subject_id INT NOT NULL,
-                                           period VARCHAR(20) DEFAULT '2026-I',
-    schedule_data JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB;
-
+-- 7. Tabla de Inscripciones
+CREATE TABLE enrollments (
+                             id INT AUTO_INCREMENT PRIMARY KEY,
+                             user_id INT NOT NULL,
+                             subject_id INT NOT NULL,
+                             period VARCHAR(20) DEFAULT '2026-I',
+                             schedule_data JSON,
+                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                             FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 
 -- =========================================================================
 -- CARGA DE DATOS INICIALES (CARRERAS Y MENCIONES)
@@ -245,6 +248,7 @@ INSERT INTO subjects (code, name, uc, semester, specialization_id, type) VALUES
 -- REGISTRO DE VICTOR J. GONZALEZ (ADMIN)
 -- =========================================================================
 
+-- 🌟 CORREGIDO: SE AÑADIÓ EL TELÉFONO AL INSERT DE ADMINISTRADOR
 INSERT INTO users (id, student_code, full_name, email, phone, password_hash, career_id, specialization_id, role, age, birth_date)
 VALUES (1, 'INGINF-26327337', 'Victor J. Gonzalez', 'vjgg101@gmail.com', '0412-8226885', 'Vjgg+8544+', 1, 1, 'admin', 28, '2000-01-01');
 

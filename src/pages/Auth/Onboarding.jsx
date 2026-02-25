@@ -1,20 +1,12 @@
-import React, { useState, useMemo, useEffect, createContext, useContext } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Anchor, ChevronRight, GraduationCap, CheckCircle,
-    Plus, CheckCircle2, User, Book, ChevronDown, ChevronUp, Lock, Phone
+    Plus, CheckCircle2, User, Book, ChevronDown, ChevronUp, Lock, Phone, Loader2
 } from 'lucide-react';
 
-// --- SEGURIDAD DE CONTEXTO ---
-let usePensum;
-try {
-    const PensumModule = require('../../context/PensumContext');
-    usePensum = PensumModule.usePensum;
-} catch (e) {
-    const MockContext = createContext({ setMateriasAprobadas: () => {}, login: () => {}, setAllSubjects: () => {}, user: null });
-    usePensum = () => useContext(MockContext);
-}
-// -----------------------------
+// 🌟 IMPORTACIÓN REAL RESTAURADA (Sin bloqueos de compatibilidad)
+import { usePensum } from '../../context/PensumContext';
 
 const ROMANOS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
@@ -23,12 +15,15 @@ const Onboarding = () => {
     const [approvedSubjects, setApprovedSubjects] = useState(new Set());
     const [subjectsFromDB, setSubjectsFromDB] = useState([]);
     const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
+    const [isFinalizing, setIsFinalizing] = useState(false);
+
+    // Set para manejar qué semestres están encogidos/cerrados
     const [collapsedSemesters, setCollapsedSemesters] = useState(new Set());
 
-    // Estados para Carreras y Menciones dinámicas
     const [careers, setCareers] = useState([]);
     const [specializations, setSpecializations] = useState([]);
 
+    // Extraemos el login real de tu contexto
     const { login, setAllSubjects, user } = usePensum();
     const navigate = useNavigate();
 
@@ -45,30 +40,25 @@ const Onboarding = () => {
     const studentCode = sessionStorage.getItem('pending_student_code');
 
     useEffect(() => {
+        // Redirección de seguridad si no hay código pendiente
         if (!studentCode && !user) navigate('/auth');
-        else if (user && !studentCode) navigate('/app');
 
-        // Cargar carreras al montar el componente y AUTO-DETECTAR por el código
         fetch('http://localhost:5000/api/careers')
             .then(res => res.json())
             .then(data => {
                 setCareers(data);
-
-                // Lógica de autoselección por prefijo (ej: "INGM-12345" -> "INGM")
                 const prefix = studentCode ? studentCode.split('-')[0].toUpperCase() : '';
                 const matchedCareer = data.find(c => c.code === prefix);
 
                 if (matchedCareer) {
                     setOnboardingData(prev => ({ ...prev, careerId: matchedCareer.id }));
                 } else if(data.length > 0) {
-                    // Fallback en caso de que el código no tenga un formato válido
                     setOnboardingData(prev => ({ ...prev, careerId: data[0].id }));
                 }
             })
-            .catch(err => console.error("Error cargando carreras"));
+            .catch(err => console.error("Error cargando carreras:", err));
     }, [studentCode, user, navigate]);
 
-    // Cargar menciones cuando cambie la carrera detectada
     useEffect(() => {
         if (onboardingData.careerId) {
             fetch(`http://localhost:5000/api/specializations/${onboardingData.careerId}`)
@@ -76,7 +66,11 @@ const Onboarding = () => {
                 .then(data => {
                     setSpecializations(data);
                     if(data.length > 0) {
-                        setOnboardingData(prev => ({ ...prev, mencionId: data[0].id, mencionName: data[0].name }));
+                        setOnboardingData(prev => ({
+                            ...prev,
+                            mencionId: data[0].id,
+                            mencionName: data[0].name
+                        }));
                     }
                 });
         }
@@ -89,7 +83,11 @@ const Onboarding = () => {
     const handleMencionChange = (e) => {
         const selectedId = e.target.value;
         const selectedSpec = specializations.find(s => s.id.toString() === selectedId);
-        setOnboardingData({ ...onboardingData, mencionId: selectedId, mencionName: selectedSpec?.name || '' });
+        setOnboardingData({
+            ...onboardingData,
+            mencionId: selectedId,
+            mencionName: selectedSpec?.name || ''
+        });
     };
 
     const fetchMencionSubjects = async () => {
@@ -103,7 +101,7 @@ const Onboarding = () => {
                 setStep(3);
             }
         } catch (err) {
-            console.error("⚓ Error al conectar con la base de datos MySQL");
+            console.error("⚓ Error al conectar con MySQL");
         } finally {
             setIsLoadingSubjects(false);
         }
@@ -114,14 +112,13 @@ const Onboarding = () => {
         if (currentApprovedSet.has(subject.code)) return false;
 
         const isCommon = subject.specialization_id === null;
-        const hasSameTypeSelected = subjectsFromDB
+        return subjectsFromDB
             .filter(s => s.semester === subject.semester)
             .some(s =>
                 s.type === 'Electiva' &&
                 ((isCommon && s.specialization_id === null) || (!isCommon && s.specialization_id !== null)) &&
                 currentApprovedSet.has(s.code)
             );
-        return hasSameTypeSelected;
     };
 
     const toggleSemesterCollapse = (sem) => {
@@ -131,10 +128,18 @@ const Onboarding = () => {
         setCollapsedSemesters(newSet);
     };
 
+    // 🌟 FUNCIÓN FINALIZAR LIMPIA Y DIRECTA
     const handleFinalize = async () => {
+        setIsFinalizing(true);
+
         const payload = {
-            studentCode,
-            ...onboardingData,
+            studentCode: studentCode,
+            fullName: onboardingData.fullName,
+            age: onboardingData.age ? parseInt(onboardingData.age) : null,
+            birthDate: onboardingData.birthDate ? onboardingData.birthDate : null,
+            phone: onboardingData.phone || 'Sin teléfono',
+            careerId: onboardingData.careerId || 1,
+            mencionId: onboardingData.mencionId || 1,
             approvedSubjects: Array.from(approvedSubjects)
         };
 
@@ -147,26 +152,25 @@ const Onboarding = () => {
             const result = await response.json();
 
             if (result.success) {
-                sessionStorage.removeItem('pending_student_code');
+                // 1. Ejecutamos tu función de login real
                 login({
                     full_name: onboardingData.fullName,
                     student_code: studentCode,
                     mencion_name: onboardingData.mencionName,
                     role: 'cadete'
                 });
-                navigate('/app'); // <-- REDIRECCIÓN AL DASHBOARD AÑADIDA AQUÍ
+                // 2. Limpiamos el código temporal
+                sessionStorage.removeItem('pending_student_code');
+                // 3. Forzamos la redirección al Dashboard
+                navigate('/app', { replace: true });
+            } else {
+                alert("Aviso del servidor: " + (result.message || result.error));
             }
         } catch (err) {
-            console.error("⚓ Error al guardar el registro final. Aplicando redirección de emergencia.");
-            // Fallback para que si no hay server, igual funcione en la vista previa y siga adelante
-            sessionStorage.removeItem('pending_student_code');
-            login({
-                full_name: onboardingData.fullName || 'Cadete',
-                student_code: studentCode || '123456',
-                mencion_name: onboardingData.mencionName,
-                role: 'cadete'
-            });
-            navigate('/app'); // <-- REDIRECCIÓN FALLBACK
+            console.error("Error crítico de conexión:", err);
+            alert("Ocurrió un error al contactar con la base de datos.");
+        } finally {
+            setIsFinalizing(false);
         }
     };
 
@@ -200,9 +204,9 @@ const Onboarding = () => {
                         <div>
                             <h2 className="text-4xl font-black italic mb-6 leading-tight">Configura tu Perfil</h2>
                             <p className="text-blue-200 text-sm leading-relaxed opacity-80 italic">
-                                {step === 1 && "Completa tus datos personales, incluyendo número de contacto, para generar tu expediente académico."}
-                                {step === 2 && "Tu carrera ha sido detectada automáticamente. Selecciona tu mención para cargar el pensum."}
-                                {step === 3 && "Registra tu pensum. Recuerda: máximo 1 electiva común y 1 de mención por semestre."}
+                                {step === 1 && "Completa tus datos personales para generar tu expediente académico."}
+                                {step === 2 && "Tu carrera ha sido detectada automáticamente. Selecciona tu mención."}
+                                {step === 3 && "Registra tu pensum histórico. Marca las materias que ya has aprobado."}
                             </p>
                         </div>
                         <div className="space-y-5">
@@ -250,7 +254,7 @@ const Onboarding = () => {
                                 </div>
                                 <button
                                     onClick={() => setStep(2)}
-                                    disabled={!onboardingData.fullName || !onboardingData.age || !onboardingData.phone}
+                                    disabled={!onboardingData.fullName || !onboardingData.age || !onboardingData.phone || !onboardingData.birthDate}
                                     className="btn-fill w-full py-5 mt-4 border-2 border-blue-600 text-blue-600 rounded-2xl font-black text-xl shadow-xl transition-all uppercase disabled:opacity-30 disabled:pointer-events-none"
                                 >
                                     Siguiente Paso
@@ -265,20 +269,14 @@ const Onboarding = () => {
                                 </div>
                                 <h3 className="text-3xl font-black text-blue-950 tracking-tight uppercase">Especialización</h3>
 
-                                {/* CARRERA AUTO-DETECTADA (READ-ONLY) */}
                                 <div className="relative text-left">
                                     <label className="text-[10px] font-black text-blue-600 uppercase mb-2 ml-4 block tracking-[0.2em]">Carrera Detectada</label>
                                     <div className="w-full p-5 bg-gray-50 rounded-2xl border-2 border-gray-200 text-gray-600 font-bold flex items-center justify-between shadow-inner">
-                                        <span>{careers.find(c => c.id === onboardingData.careerId)?.name || 'Procesando código...'}</span>
+                                        <span>{careers.find(c => c.id === onboardingData.careerId)?.name || 'Procesando...'}</span>
                                         <Lock size={18} className="text-gray-400" />
                                     </div>
-                                    <p className="text-[10px] text-gray-400 mt-2 ml-4 font-medium flex items-center gap-1">
-                                        <CheckCircle2 size={12} className="text-emerald-500"/>
-                                        Asignada automáticamente por tu código ({studentCode})
-                                    </p>
                                 </div>
 
-                                {/* SELECTOR DE MENCIÓN DINÁMICO (FILTRADO POR LA CARRERA) */}
                                 <div className="relative text-left">
                                     <label className="text-[10px] font-black text-blue-600 uppercase mb-2 ml-4 block tracking-[0.2em]">Mención de Especialidad</label>
                                     <select
@@ -303,7 +301,7 @@ const Onboarding = () => {
                                         className="btn-fill flex-1 py-5 border-2 border-blue-600 text-blue-600 rounded-2xl font-black text-lg transition-all uppercase overflow-hidden"
                                         disabled={isLoadingSubjects || !onboardingData.mencionId}
                                     >
-                                        <span className="relative z-10">{isLoadingSubjects ? 'Conectando DB...' : 'Registrar Pensum'}</span>
+                                        <span className="relative z-10">{isLoadingSubjects ? 'Conectando...' : 'Registrar Pensum'}</span>
                                     </button>
                                 </div>
                             </div>
@@ -323,54 +321,50 @@ const Onboarding = () => {
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto pr-3 custom-scrollbar space-y-6 min-h-0">
-                                    {Object.keys(groupedSubjects).length === 0 ? (
-                                        <div className="text-center p-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                                            <p className="text-gray-500 font-bold">No hay materias cargadas para esta mención aún en la base de datos.</p>
-                                        </div>
-                                    ) : (
-                                        Object.entries(groupedSubjects).map(([sem, subjects]) => {
-                                            const numSem = parseInt(sem);
-                                            const isCollapsed = collapsedSemesters.has(numSem);
+                                    {Object.entries(groupedSubjects).map(([sem, subjects]) => {
+                                        const numSem = parseInt(sem);
+                                        const isCollapsed = collapsedSemesters.has(numSem);
+                                        const allSelected = subjects.every(m => approvedSubjects.has(m.code));
 
-                                            // 🌟 VARIABLE AÑADIDA: Comprueba si todas las materias del semestre están marcadas
-                                            const allSelected = subjects.every(m => approvedSubjects.has(m.code));
+                                        return (
+                                            <div key={sem} className="space-y-3 bg-slate-50/50 p-4 rounded-3xl border border-slate-100 transition-all">
 
-                                            return (
-                                                <div key={sem} className="space-y-3 bg-slate-50/50 p-4 rounded-3xl border border-slate-100 transition-all">
-                                                    <div className="flex items-center justify-between">
-                                                        <button onClick={() => toggleSemesterCollapse(numSem)} className="flex items-center gap-2 group">
-                                                            <div className={`p-1 rounded-lg transition-colors ${isCollapsed ? 'bg-blue-100 text-blue-600' : 'bg-white text-gray-400 group-hover:text-blue-500'}`}>
-                                                                {isCollapsed ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
-                                                            </div>
-                                                            <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-widest pl-2">Semestre {ROMANOS[numSem-1] || numSem}</h4>
-                                                        </button>
+                                                <div className="flex items-center justify-between">
+                                                    <button onClick={() => toggleSemesterCollapse(numSem)} className="flex items-center gap-2 group">
+                                                        <div className={`p-1 rounded-lg transition-colors ${isCollapsed ? 'bg-blue-100 text-blue-600' : 'bg-white text-gray-400 group-hover:text-blue-500'}`}>
+                                                            {isCollapsed ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
+                                                        </div>
+                                                        <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-widest pl-2">Semestre {ROMANOS[numSem-1] || numSem}</h4>
+                                                    </button>
 
-                                                        {/* 🌟 BOTÓN RESTAURADO: Marcar / Desmarcar todas las de este semestre */}
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setApprovedSubjects(prev => {
-                                                                    const next = new Set(prev);
-                                                                    if (allSelected) {
-                                                                        subjects.forEach(m => next.delete(m.code));
-                                                                    } else {
-                                                                        subjects.forEach(m => next.add(m.code));
-                                                                    }
-                                                                    return next;
-                                                                });
-                                                            }}
-                                                            className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all border ${
-                                                                allSelected
-                                                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
-                                                                    : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
-                                                            }`}
-                                                        >
-                                                            {allSelected ? 'Desmarcar Semestre' : 'Marcar Semestre'}
-                                                        </button>
-                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setApprovedSubjects(prev => {
+                                                                const next = new Set(prev);
+                                                                if (allSelected) {
+                                                                    subjects.forEach(m => next.delete(m.code));
+                                                                } else {
+                                                                    subjects.forEach(m => {
+                                                                        if (!isElectiveDisabled(m, next)) next.add(m.code);
+                                                                    });
+                                                                }
+                                                                return next;
+                                                            });
+                                                        }}
+                                                        className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all border ${
+                                                            allSelected
+                                                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                                                                : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
+                                                        }`}
+                                                    >
+                                                        {allSelected ? 'Desmarcar Todo' : 'Marcar Todo'}
+                                                    </button>
+                                                </div>
 
-                                                    {!isCollapsed && (
-                                                        <div className="grid grid-cols-1 gap-2 animate-in fade-in zoom-in-95 duration-300">
+                                                <div className={`grid transition-all duration-300 ease-in-out ${isCollapsed ? 'grid-rows-[0fr] opacity-0 overflow-hidden' : 'grid-rows-[1fr] opacity-100'}`}>
+                                                    <div className="overflow-hidden">
+                                                        <div className="grid grid-cols-1 gap-2 animate-in fade-in zoom-in-95 duration-300 pt-2">
                                                             {subjects.map(m => {
                                                                 const isSelected = approvedSubjects.has(m.code);
                                                                 const isBlocked = isElectiveDisabled(m, approvedSubjects);
@@ -411,16 +405,23 @@ const Onboarding = () => {
                                                                 );
                                                             })}
                                                         </div>
-                                                    )}
+                                                    </div>
                                                 </div>
-                                            );
-                                        })
-                                    )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
 
                                 <div className="pt-8 flex gap-4 border-t border-gray-100 mt-6 shrink-0">
                                     <button onClick={() => setStep(2)} className="p-5 text-gray-400 font-bold uppercase text-xs hover:text-blue-950 transition-colors">Regresar</button>
-                                    <button onClick={handleFinalize} className="btn-fill-emerald flex-1 py-5 border-2 border-emerald-500 text-emerald-600 rounded-2xl font-black text-xl shadow-xl transition-all uppercase">¡REGISTRO COMPLETADO!</button>
+                                    <button
+                                        onClick={handleFinalize}
+                                        disabled={isFinalizing}
+                                        className="btn-fill-emerald flex-1 py-5 border-2 border-emerald-500 text-emerald-600 rounded-2xl font-black text-xl shadow-xl transition-all uppercase flex justify-center items-center gap-2"
+                                    >
+                                        {isFinalizing ? <Loader2 className="animate-spin" size={20}/> : null}
+                                        {isFinalizing ? 'Guardando...' : '¡REGISTRO COMPLETADO!'}
+                                    </button>
                                 </div>
                             </div>
                         )}
