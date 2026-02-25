@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* --- ANIMACIÓN DE GRADIENTE (Fondo de Bienvenida y Auth) --- */
+.bg-gradient-animate {
+  background: linear-gradient(-45deg, #020617, #082f49, #0f172a, #1e3a8a);
+  background-size: 400% 400%;
+  animation: gradient-move 12s ease infinite;
+}
+
+@keyframes gradient-move {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* --- SCROLLBARS PERSONALIZADAS (Suite MiUMC) --- */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* --- EFECTO FILL PROFESIONAL PARA BOTONES --- */
+.btn-fill {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-fill::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #2563eb;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: -1;
+  border-radius: inherit;
+}
+
+.btn-fill:hover::before {
+  transform: scaleX(1);
+}
+
+.btn-fill:hover {
+  color: white !important;
+  border-color: transparent !important;
+}
