@@ -6,27 +6,22 @@ import {
     UserCog, X, UserMinus, Briefcase, ChevronRight, Loader2,
     BookOpen, MapPin, Clock, FileText, Settings
 } from 'lucide-react';
-import { API_URL } from '../../config';
 
+// ============================================================================
+// ⚠️ NOTA PARA TU ENTORNO LOCAL (VS CODE):
+// Para conectar con tu Backend real, borra el bloque "MOCK LOCAL" de abajo
+// y usa esta importación:
+// import { usePensum, API_BASE_URL } from '../../context/PensumContext';
+// ============================================================================
 
-// --- SEGURIDAD DE CONTEXTO (Para previsualización y entorno local) ---
-let usePensum;
-try {
-    const PensumModule = require('../../context/PensumContext');
-    usePensum = PensumModule.usePensum;
-} catch (e) {
-    const MockContext = createContext({
-        user: { full_name: "Admin de Prueba", role: "admin", student_code: "ADM001" },
-        syncGlobalData: () => {}
-    });
-    usePensum = () => useContext(MockContext);
-}
-// --------------------------------------------------------------------
+// --- MOCK LOCAL PARA PREVISUALIZACIÓN EN CANVAS ---
+const API_BASE_URL = 'http://localhost:8000/api';
+const MockContext = createContext({
+    user: { full_name: "Admin de Prueba", role: "admin", student_code: "ADM001" },
+    syncGlobalData: () => {}
+});
+const usePensum = () => useContext(MockContext);
 
-const ROMANOS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-
-// 🌟 MOCK USERS PARA PREVISUALIZACIÓN DE ROLES 🌟
-// Estos usuarios se añadirán temporalmente a tu lista real para que puedas ver el diseño.
 const MOCK_USERS = [
     { id: 901, full_name: "Prof. Alberto Martinez", student_code: "PROF-001", role: "profesor", career_name: "Ingeniería Marítima", phone: "0414-9876543", email: "amartinez@miumc.edu.ve", mencion_name: "Operaciones" },
     { id: 902, full_name: "Dra. María López", student_code: "COORD-001", role: "coordinador", admin_department: "Control de Estudios", phone: "0412-5555555", email: "mlopez@miumc.edu.ve", mencion_name: null },
@@ -34,6 +29,9 @@ const MOCK_USERS = [
     { id: 904, full_name: "Lic. Ana Gómez", student_code: "DIR-001", role: "director", admin_department: "Planificación Académica", phone: "0416-9998877", email: "agomez@miumc.edu.ve", mencion_name: null },
     { id: 905, full_name: "TSU. José Ramírez", student_code: "ADMIN-001", role: "administrativo", admin_department: "Coordinación Docente", phone: "0412-3334455", email: "jramirez@miumc.edu.ve", mencion_name: null }
 ];
+// --------------------------------------------------
+
+const ROMANOS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 const AdminPanel = () => {
     const [users, setUsers] = useState([]);
@@ -53,11 +51,11 @@ const AdminPanel = () => {
     const [editingUser, setEditingUser] = useState(null);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    // 🌟 ESTADOS PARA MODALES ESTRUCTURALES
+    // ESTADOS PARA MODALES ESTRUCTURALES
     const [showCreateProfModal, setShowCreateProfModal] = useState(false);
     const [showCreateCoordModal, setShowCreateCoordModal] = useState(false);
 
-    // 🌟 NUEVO ESTADO: Modal de Asignación de Materias a Profesor
+    // Modal de Asignación de Materias a Profesor
     const [showAssignSubjectModal, setShowAssignSubjectModal] = useState(false);
     const [selectedTeacher, setSelectedTeacher] = useState(null);
 
@@ -81,16 +79,20 @@ const AdminPanel = () => {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch(`${API_URL}/users`);
+            // 🌟 RUTA LARAVEL: Obtener todos los usuarios
+            const response = await fetch(`${API_BASE_URL}/users`, {
+                headers: { 'Accept': 'application/json' }
+            });
             if (response.ok) {
                 const data = await response.json();
-                // 🌟 COMBINAMOS REALES Y MOCKS PARA VER LOS CAMBIOS
-                setUsers(Array.isArray(data) ? [...data, ...MOCK_USERS] : MOCK_USERS);
+                const arrayData = Array.isArray(data) ? data : (data.data || []);
+                // COMBINAMOS CON LOS MOCKS PARA QUE PUEDAS PREVISUALIZARLOS
+                setUsers([...arrayData, ...MOCK_USERS]);
             } else {
                 setUsers(MOCK_USERS);
             }
         } catch (err) {
-            console.error("Error al obtener usuarios:", err);
+            console.error("Error al obtener usuarios (usando mocks):", err);
             setUsers(MOCK_USERS);
         } finally {
             setIsLoading(false);
@@ -99,15 +101,26 @@ const AdminPanel = () => {
 
     const fetchCareers = async () => {
         try {
-            const response = await fetch('${API_URL}/careers');
-            if(response.ok) setCareersList(await response.json());
+            const response = await fetch(`${API_BASE_URL}/careers`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if(response.ok) {
+                const data = await response.json();
+                setCareersList(Array.isArray(data) ? data : (data.data || []));
+            }
         } catch (err) { console.error(err); }
     };
 
     const fetchSpecializations = async (careerId) => {
         try {
-            const response = await fetch(`${API_URL}/specializations/${careerId}`);
-            if(response.ok) setSpecsList(await response.json());
+            // 🌟 RUTA LARAVEL: Menciones por Carrera
+            const response = await fetch(`${API_BASE_URL}/careers/${careerId}/specializations`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if(response.ok) {
+                const data = await response.json();
+                setSpecsList(Array.isArray(data) ? data : (data.data || []));
+            }
         } catch (err) { console.error(err); }
     };
 
@@ -116,18 +129,26 @@ const AdminPanel = () => {
         try {
             const specId = user?.specialization_id || 1;
 
-            const subjectsResponse = await fetch(`${API_URL}/subjects/${specId}`);
+            // 🌟 RUTA LARAVEL: Materias por Mención
+            const subjectsResponse = await fetch(`${API_BASE_URL}/specializations/${specId}/subjects`, {
+                headers: { 'Accept': 'application/json' }
+            });
             if(subjectsResponse.ok) {
                 const subjectsData = await subjectsResponse.json();
-                setAllSubjects(Array.isArray(subjectsData) ? subjectsData : []);
+                const arrayData = Array.isArray(subjectsData) ? subjectsData : (subjectsData.data || []);
+                setAllSubjects(arrayData);
             } else {
                 setAllSubjects([]);
             }
 
-            const progressResponse = await fetch(`${API_URL}/progress/${user?.student_code}`);
+            // Progreso del estudiante
+            const progressResponse = await fetch(`${API_BASE_URL}/progress/${user?.student_code}`, {
+                headers: { 'Accept': 'application/json' }
+            });
             if(progressResponse.ok) {
                 const progressData = await progressResponse.json();
-                setUserRecords(new Set(Array.isArray(progressData) ? progressData : []));
+                const arrayData = Array.isArray(progressData) ? progressData : (progressData.data || []);
+                setUserRecords(new Set(arrayData));
             } else {
                 setUserRecords(new Set());
             }
@@ -144,9 +165,12 @@ const AdminPanel = () => {
         if (!selectedUser) return;
         setIsUpdating(true);
         try {
-            const response = await fetch('http://localhost:5000/api/admin/update-records-bulk', {
+            const response = await fetch(`${API_BASE_URL}/admin/update-records-bulk`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify({
                     userId: selectedUser.id,
                     approvedSubjectCodes: Array.from(userRecords)
@@ -155,6 +179,8 @@ const AdminPanel = () => {
             if (response.ok) {
                 if (syncGlobalData) syncGlobalData(selectedUser.student_code, Array.from(userRecords));
                 setSelectedUser(null);
+            } else {
+                alert('Error al guardar el récord académico.');
             }
         } catch (err) {
             console.error("Error al guardar récord:", err);
@@ -172,9 +198,15 @@ const AdminPanel = () => {
                 return;
             }
 
-            const response = await fetch(`${API_URL}/users/${id}`, { method: 'DELETE' });
+            // 🌟 RUTA LARAVEL: Eliminar usuario
+            const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+                method: 'DELETE',
+                headers: { 'Accept': 'application/json' }
+            });
             if (response.ok) {
                 setUsers(users.filter(u => u.id !== id));
+            } else {
+                alert('Hubo un error al intentar eliminar el usuario.');
             }
         } catch (err) {
             console.error("Error al eliminar usuario:", err);
@@ -190,7 +222,6 @@ const AdminPanel = () => {
             career_id: editingUser.career_id || 1,
             specialization_id: editingUser.specialization_id || 1,
             phone: editingUser.phone || 'Sin teléfono'
-            // admin_department se procesará aquí cuando se integre a Backend
         };
 
         try {
@@ -202,14 +233,22 @@ const AdminPanel = () => {
                 return;
             }
 
-            const response = await fetch(`${API_URL}/users/${editingUser.id}`, {
+            // 🌟 RUTA LARAVEL: Actualizar usuario
+            const response = await fetch(`${API_BASE_URL}/users/${editingUser.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify(payload)
             });
+
             if (response.ok) {
                 setEditingUser(null);
                 fetchUsers();
+            } else {
+                const errorData = await response.json();
+                alert(`Error: ${errorData.message || 'Verifica los datos enviados.'}`);
             }
         } catch (err) {
             console.error("Error al actualizar perfil:", err);
@@ -256,10 +295,8 @@ const AdminPanel = () => {
 
             // Lógica de Pestañas
             let matchesTab = false;
-            // Admins y Cadetes son población estudiantil
             if (activeTab === 'estudiantes') matchesTab = ['cadete', 'admin'].includes(userRole);
             else if (activeTab === 'profesores') matchesTab = userRole === 'profesor';
-            // Coordinación reservado para futuros roles
             else if (activeTab === 'coordinacion') matchesTab = ['coordinador', 'director', 'administrativo'].includes(userRole);
 
             return matchesSearch && matchesTab;

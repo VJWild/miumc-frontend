@@ -4,7 +4,7 @@ import {
     Target, Anchor, Award, Sparkles, Calendar,
     Book, TrendingUp, ChevronRight, MapPin, GraduationCap
 } from 'lucide-react';
-
+import { API_URL } from '../../config';
 // Importamos el hook del contexto para obtener los datos del usuario en sesión
 import { usePensum } from '../../context/PensumContext';
 

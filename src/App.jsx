@@ -1,4 +1,4 @@
-// Ejemplo de App.jsx modular para tu VS Code local
+//
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { PensumProvider } from './context/PensumContext';

@@ -17,7 +17,7 @@ import {
 // --- IMPORTACIONES NATIVAS (Vite) ---
 import { DAYS, HOURS } from '../../mocks/data';
 import { usePensum } from '../../context/PensumContext';
-
+import { API_URL } from '../../config';
 const Schedule = () => {
     const { materiasInscritas, user } = usePensum();
     const scheduleRef = useRef(null);

@@ -5,9 +5,20 @@ import {
     Plus, CheckCircle2, User, Book, ChevronDown, ChevronUp, Lock, Phone, Loader2
 } from 'lucide-react';
 
-// 🌟 IMPORTACIÓN REAL RESTAURADA (Sin bloqueos de compatibilidad)
-import { usePensum } from '../../context/PensumContext';
-import { API_URL } from '../../config';
+// 🌟 IMPORTACIÓN REAL DEL CONTEXTO (PARA TU PROYECTO LOCAL VITE)
+// ¡IMPORTANTE! Descomenta la línea de abajo cuando lo pegues en tu código local:
+// import { usePensum, API_BASE_URL } from '../../context/PensumContext';
+
+// 🛑 MOCK DE SEGURIDAD PARA LA VISTA PREVIA DEL NAVEGADOR
+// (Puedes borrar este bloque en tu proyecto local)
+const API_BASE_URL = 'http://localhost:8000/api';
+const MockContext = React.createContext({
+    login: () => {},
+    setAllSubjects: () => {},
+    user: { code: '123456' }
+});
+const usePensum = () => React.useContext(MockContext);
+// 🛑 FIN DEL MOCK
 
 const ROMANOS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
@@ -38,23 +49,29 @@ const Onboarding = () => {
         mencionName: ''
     });
 
-    const studentCode = sessionStorage.getItem('pending_student_code');
+    // En el entorno local, esto viene del proceso de registro previo
+    const studentCode = sessionStorage.getItem('pending_student_code') || '123456';
 
     useEffect(() => {
         // Redirección de seguridad si no hay código pendiente
         if (!studentCode && !user) navigate('/auth');
 
-        fetch('http://localhost:5000/api/careers')
+        // 🌟 RUTA 1: Carga de carreras desde Laravel
+        fetch(`${API_BASE_URL}/careers`, {
+            headers: { 'Accept': 'application/json' }
+        })
             .then(res => res.json())
             .then(data => {
-                setCareers(data);
+                // En caso de que el API devuelva data o un wrapper
+                const arrayData = Array.isArray(data) ? data : (data.data || []);
+                setCareers(arrayData);
                 const prefix = studentCode ? studentCode.split('-')[0].toUpperCase() : '';
-                const matchedCareer = data.find(c => c.code === prefix);
+                const matchedCareer = arrayData.find(c => c.code === prefix);
 
                 if (matchedCareer) {
                     setOnboardingData(prev => ({ ...prev, careerId: matchedCareer.id }));
-                } else if(data.length > 0) {
-                    setOnboardingData(prev => ({ ...prev, careerId: data[0].id }));
+                } else if(arrayData.length > 0) {
+                    setOnboardingData(prev => ({ ...prev, careerId: arrayData[0].id }));
                 }
             })
             .catch(err => console.error("Error cargando carreras:", err));
@@ -62,18 +79,23 @@ const Onboarding = () => {
 
     useEffect(() => {
         if (onboardingData.careerId) {
-            fetch(`${API_URL}/careers/${onboardingData.careerId}/specializations`)
+            // 🌟 RUTA 2: Carga de menciones (Actualizada al nuevo mapeo REST de Laravel)
+            fetch(`${API_BASE_URL}/careers/${onboardingData.careerId}/specializations`, {
+                headers: { 'Accept': 'application/json' }
+            })
                 .then(res => res.json())
                 .then(data => {
-                    setSpecializations(data);
-                    if(data.length > 0) {
+                    const arrayData = Array.isArray(data) ? data : (data.data || []);
+                    setSpecializations(arrayData);
+                    if(arrayData.length > 0) {
                         setOnboardingData(prev => ({
                             ...prev,
-                            mencionId: data[0].id,
-                            mencionName: data[0].name
+                            mencionId: arrayData[0].id,
+                            mencionName: arrayData[0].name
                         }));
                     }
-                });
+                })
+                .catch(err => console.error("Error cargando menciones:", err));
         }
     }, [onboardingData.careerId]);
 
@@ -94,15 +116,20 @@ const Onboarding = () => {
     const fetchMencionSubjects = async () => {
         setIsLoadingSubjects(true);
         try {
-            const response = await fetch(`${API_URL}/specializations/${onboardingData.mencionId}/subjects`);
+            // 🌟 RUTA 3: Carga de materias por mención (Actualizada al nuevo mapeo REST de Laravel)
+            const response = await fetch(`${API_BASE_URL}/specializations/${onboardingData.mencionId}/subjects`, {
+                headers: { 'Accept': 'application/json' }
+            });
             const data = await response.json();
-            if (Array.isArray(data)) {
-                setSubjectsFromDB(data);
-                if (setAllSubjects) setAllSubjects(data);
+            const arrayData = Array.isArray(data) ? data : (data.data || []);
+
+            if (Array.isArray(arrayData)) {
+                setSubjectsFromDB(arrayData);
+                if (setAllSubjects) setAllSubjects(arrayData);
                 setStep(3);
             }
         } catch (err) {
-            console.error("⚓ Error al conectar con MySQL");
+            console.error("⚓ Error al conectar con Laravel");
         } finally {
             setIsLoadingSubjects(false);
         }
@@ -145,14 +172,18 @@ const Onboarding = () => {
         };
 
         try {
-            const response = await fetch(`${API_URL}/onboarding/complete`, {
+            // 🌟 RUTA 4: Guardar Onboarding (Actualizada a Laravel API)
+            const response = await fetch(`${API_BASE_URL}/onboarding/complete`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json' // Cabecera obligatoria de Laravel
+                },
                 body: JSON.stringify(payload)
             });
             const result = await response.json();
 
-            if (result.success) {
+            if (response.ok && (result.success || result.status === 'success')) {
                 // 1. Ejecutamos tu función de login real
                 login({
                     full_name: onboardingData.fullName,
@@ -165,7 +196,7 @@ const Onboarding = () => {
                 // 3. Forzamos la redirección al Dashboard
                 navigate('/app', { replace: true });
             } else {
-                alert("Aviso del servidor: " + (result.message || result.error));
+                alert("Aviso del servidor: " + (result.message || result.error || "Error de validación"));
             }
         } catch (err) {
             console.error("Error crítico de conexión:", err);

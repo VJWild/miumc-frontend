@@ -86,6 +86,46 @@ CREATE TABLE enrollments (
                              FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- 8. Tabla de Material de Apoyo (Aula Virtual)
+CREATE TABLE class_materials (
+                                 id INT AUTO_INCREMENT PRIMARY KEY,
+                                 subject_id INT NOT NULL,
+                                 professor_id INT NOT NULL,
+                                 title VARCHAR(255) NOT NULL,
+                                 type ENUM('pdf', 'link', 'video') NOT NULL,
+                                 url VARCHAR(500) NOT NULL,
+                                 size VARCHAR(20),
+                                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                 FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+                                 FOREIGN KEY (professor_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- 9. Tabla de Evaluaciones (Plan de Evaluación)
+CREATE TABLE evaluations (
+                             id INT AUTO_INCREMENT PRIMARY KEY,
+                             subject_id INT NOT NULL,
+                             professor_id INT NOT NULL,
+                             title VARCHAR(255) NOT NULL,
+                             due_date DATE NOT NULL,
+                             max_score DECIMAL(4,2) NOT NULL DEFAULT 20.00,
+                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                             FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+                             FOREIGN KEY (professor_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- 10. Tabla de Entregas de Estudiantes
+CREATE TABLE student_submissions (
+                                     id INT AUTO_INCREMENT PRIMARY KEY,
+                                     evaluation_id INT NOT NULL,
+                                     user_id INT NOT NULL,
+                                     status ENUM('pending', 'submitted', 'graded') DEFAULT 'pending',
+                                     score DECIMAL(4,2) DEFAULT NULL,
+                                     file_url VARCHAR(500),
+                                     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                     FOREIGN KEY (evaluation_id) REFERENCES evaluations(id) ON DELETE CASCADE,
+                                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                                     UNIQUE KEY unique_user_evaluation (user_id, evaluation_id)
+) ENGINE=InnoDB;
 -- =========================================================================
 -- CARGA DE DATOS INICIALES (CARRERAS Y MENCIONES)
 -- =========================================================================
@@ -253,7 +293,7 @@ INSERT INTO users (id, student_code, full_name, email, phone, password_hash, car
 VALUES (1, 'INGINF-26327337', 'Victor J. Gonzalez', 'vjgg101@gmail.com', '0412-8226885', 'Vjgg+8544+', 1, 1, 'admin', 28, '2000-01-01');
 
 -- =========================================================================
--- CARGA DE PROGRESO REAL DE VÍCTOR (70%)
+-- CARGA DE MI PROGRESO: VICTOR J. GONZALEZ
 -- =========================================================================
 
 -- Aprobar todas las comunes de S1 a S4

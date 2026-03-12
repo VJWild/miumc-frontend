@@ -1,51 +1,41 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 
-// 🌟 INTENTO DE IMPORTACIÓN DESDE TU CONFIG.JS LOCAL
-// En el entorno de previsualización esto puede fallar, por lo que definimos un fallback.
-let API_URL_INTERNAL;
-try {
-    // Intentamos obtener la URL de tu archivo de configuración
-    const config = require('../config');
-    API_URL_INTERNAL = config.API_URL;
-} catch (e) {
-    // Fallback para que el sistema no rompa en la previsualización o si el archivo no se encuentra
-    API_URL_INTERNAL = 'http://localhost:8000/api';
-}
-
 const PensumContext = createContext();
 
 export const usePensum = () => useContext(PensumContext);
 
+// 🌟 Definimos la URL base para el backend de Laravel
+const API_URL = 'http://localhost:8000/api';
+
 export const PensumProvider = ({ children }) => {
-    // 1. Estado de Usuario (Sesión)
+    // 1. Inicializar el usuario desde sessionStorage para persistencia al recargar
     const [user, setUser] = useState(() => {
         try {
             const savedSession = sessionStorage.getItem('miumc_session');
             return savedSession ? JSON.parse(savedSession) : null;
-        } catch (error) { return null; }
+        } catch (error) {
+            return null;
+        }
     });
 
-    // 2. Estados Académicos
     const [materiasAprobadas, setMateriasAprobadas] = useState(new Set());
     const [allSubjects, setAllSubjects] = useState([]);
     const [loading, setLoading] = useState(false);
     const [materiasInscritas, setMateriasInscritas] = useState([]);
+
+    // 🌟 NUEVO: Estado global para notificaciones del Aula Virtual (Campanita)
     const [pendingTasksCount, setPendingTasksCount] = useState(0);
+
+    // Totales iniciales por defecto (se sobreescriben con la DB)
     const [totalesCarrera, setTotalesCarrera] = useState({ uc: 225, materias: 71 });
 
-    // 3. 🎨 MOTOR DE TEMAS (MIGRACIÓN SEMÁNTICA)
-    const [theme, setTheme] = useState(() => localStorage.getItem('nautilus_theme') || 'umc');
-
-    useEffect(() => {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('nautilus_theme', theme);
-    }, [theme]);
-
-    // 4. 🔄 FUNCIÓN DE CARGA DINÁMICA (LARAVEL 8000)
+    // 🔄 FUNCIÓN DE CARGA DINÁMICA: Obtiene el pensum y el progreso real del servidor
     const fetchUserData = useCallback(async (userData) => {
         if (!userData || !userData.code) return;
+
         setLoading(true);
 
+        // Mapeo dinámico para las rutas de la API
         const mencionToId = {
             'Redes y Telecomunicaciones': 1,
             'Seguridad Informática': 2,
@@ -55,68 +45,67 @@ export const PensumProvider = ({ children }) => {
         const specId = mencionToId[userData.mencion] || 1;
 
         try {
-            // Cabeceras obligatorias para Laravel
-            const headers = {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            };
-
-            // 🚀 PETICIONES A LARAVEL (Usando la variable centralizada)
+            // 🌟 Consultamos progreso, pensum y ahora INSCRIPCIONES en paralelo
+            // 🚨 CAMBIO APLICADO: Puerto 8000 y nueva ruta de especializaciones/materias
             const [progressRes, subjectsRes, enrollmentsRes] = await Promise.all([
-                fetch(`${API_URL_INTERNAL}/progress/${userData.code}`, { headers }),
-                fetch(`${API_URL_INTERNAL}/specializations/${specId}/subjects`, { headers }),
-                fetch(`${API_URL_INTERNAL}/enrollments/${userData.code}`, { headers })
+                fetch(`${API_URL}/progress/${userData.code}`),
+                fetch(`${API_URL}/specializations/${specId}/subjects`), // <--- Ruta actualizada según la imagen
+                fetch(`${API_URL}/enrollments/${userData.code}`)
             ]);
 
-            if (!progressRes.ok || !subjectsRes.ok) throw new Error("Error en la conexión con Laravel");
+            if (!progressRes.ok || !subjectsRes.ok) throw new Error("Error en la conexión con el servidor");
 
-            const progressData = await progressRes.json();
-            const subjectsData = await subjectsRes.json();
+            const approvedCodes = await progressRes.json();
+            const subjectsDB = await subjectsRes.json();
 
-            // 🌟 VALIDACIÓN DE ESTRUCTURA LARAVEL (.data)
-            const approvedCodes = Array.isArray(progressData) ? progressData : (progressData.data || []);
-            const subjectsDB = Array.isArray(subjectsData) ? subjectsData : (subjectsData.data || []);
-
-            // Manejo de Inscripciones
+            // 🌟 Capturamos y seteamos las materias inscritas en la BDD
             if (enrollmentsRes.ok) {
-                const enrollmentsRaw = await enrollmentsRes.json();
-                const enrolledArray = Array.isArray(enrollmentsRaw) ? enrollmentsRaw : (enrollmentsRaw.data || []);
-
-                const formattedEnrollments = enrolledArray.map(m => ({
+                const enrolledData = await enrollmentsRes.json();
+                // Adaptamos las claves de BDD al Frontend para que coincidan (codigo, nombre, etc)
+                const formattedEnrollments = enrolledData.map(m => ({
                     ...m,
                     codigo: m.code,
                     nombre: m.name
                 }));
                 setMateriasInscritas(formattedEnrollments);
 
+                // 🌟 SIMULACIÓN TEMPORAL: Notificaciones de tareas pendientes en el Aula Virtual
                 if (formattedEnrollments.length > 0) {
-                    setPendingTasksCount(Math.floor(Math.random() * 4) + 1);
+                    setPendingTasksCount(Math.floor(Math.random() * 4) + 1); // Entre 1 y 4 tareas pendientes
+                } else {
+                    setPendingTasksCount(0);
                 }
             }
 
+            // Guardamos la lista completa de materias para cálculos posteriores
             setAllSubjects(subjectsDB);
+            // Actualizamos el Set de materias aprobadas del usuario
             setMateriasAprobadas(new Set(approvedCodes));
 
-            // 🧮 CÁLCULOS DEL PENSUM
-            if (subjectsDB.length > 0) {
+            // 🧮 CÁLCULO MATEMÁTICO REAL DEL PENSUM
+            if (Array.isArray(subjectsDB) && subjectsDB.length > 0) {
+                // Filtramos obligatorias de la mención + comunes
                 const obligatorias = subjectsDB.filter(m => m.type === 'Obligatoria');
                 const totalUcObligatorias = obligatorias.reduce((sum, m) => sum + m.uc, 0);
+
+                // Calculamos cuántas electivas requiere (1 por semestre que tenga electivas)
                 const semestresConElectivas = new Set(subjectsDB.filter(m => m.type === 'Electiva').map(m => m.semester));
-                const quantityElectives = semestresConElectivas.size;
+                const cantidadElectivasReq = semestresConElectivas.size;
+                const ucElectivasReq = cantidadElectivasReq * 2; // Las electivas en el pensum UMC suelen valer 2 UC
 
                 setTotalesCarrera({
-                    uc: totalUcObligatorias + (quantityElectives * 2),
-                    materias: obligatorias.length + quantityElectives
+                    uc: totalUcObligatorias + ucElectivasReq,
+                    materias: obligatorias.length + cantidadElectivasReq
                 });
             }
         } catch (err) {
-            console.error("⚓ Error sincronizando con Laravel:", err);
+            console.error("⚓ Error sincronizando progreso con MySQL:", err);
         } finally {
             setLoading(false);
         }
     }, []);
 
-    // 🔔 SINCRONIZACIÓN GLOBAL
+    // 🔔 FUNCIÓN DE NOTIFICACIÓN GLOBAL (Para sincronización inmediata desde el Panel Admin)
     const syncGlobalData = (targetUserCode, newRecords) => {
         const currentCode = user?.code || user?.student_code;
         if (currentCode === targetUserCode) {
@@ -124,10 +113,11 @@ export const PensumProvider = ({ children }) => {
         }
     };
 
-    // Efecto de carga inicial
+    // Efecto para recargar datos cada vez que el usuario cambia o inicia sesión
     useEffect(() => {
-        if (user) fetchUserData(user);
-        else {
+        if (user) {
+            fetchUserData(user);
+        } else {
             setMateriasAprobadas(new Set());
             setAllSubjects([]);
             setMateriasInscritas([]);
@@ -135,18 +125,20 @@ export const PensumProvider = ({ children }) => {
         }
     }, [user, fetchUserData]);
 
-    // Gestión de Sesión
+    // Función de Login centralizada
     const login = (userData) => {
         const avatar = (userData.full_name || "UM").split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
         const sessionData = {
             id: userData.id,
             name: userData.full_name || userData.name,
             code: userData.student_code || userData.code,
             role: userData.role || 'cadete',
-            career: userData.career_name || "Ingeniería Informática",
+            career: "Ingeniería Informática",
             mencion: userData.mencion_name || userData.mencion || "Redes y Telecomunicaciones",
             avatar: avatar
         };
+
         setUser(sessionData);
         sessionStorage.setItem('miumc_session', JSON.stringify(sessionData));
     };
@@ -157,12 +149,15 @@ export const PensumProvider = ({ children }) => {
         setMateriasAprobadas(new Set());
         setAllSubjects([]);
         setMateriasInscritas([]);
+        setTotalesCarrera({ uc: 225, materias: 71 });
+        setPendingTasksCount(0);
     };
 
-    // Cálculo de créditos aprobados
+    // 📈 CÁLCULO DE UC APROBADAS EN TIEMPO REAL
     const ucAprobadas = useMemo(() => {
         let sum = 0;
         if (!allSubjects.length) return 0;
+
         materiasAprobadas.forEach(code => {
             const subject = allSubjects.find(s => s.code === code);
             if (subject) sum += subject.uc;
@@ -177,8 +172,7 @@ export const PensumProvider = ({ children }) => {
             materiasInscritas, setMateriasInscritas,
             ucAprobadas, totalesCarrera,
             allSubjects, syncGlobalData,
-            pendingTasksCount, setPendingTasksCount,
-            theme, setTheme
+            pendingTasksCount, setPendingTasksCount
         }}>
             {children}
         </PensumContext.Provider>

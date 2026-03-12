@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Anchor, User, Lock, Mail, ChevronRight, ArrowLeft, Info, AlertCircle, Loader2 } from 'lucide-react';
-import { usePensum } from '../../context/PensumContext';
-import { API_URL } from '../../config';
+import { usePensum, API_BASE_URL } from '../../context/PensumContext';
 
 /**
  * Componente de entrada con Label Flotante.
@@ -69,11 +68,15 @@ const AuthContainer = () => {
         setIsLoading(true);
 
         if (showLoginContent) {
-            // --- INICIO DE SESIÓN (SESSION START) ---
+            // --- INICIO DE SESIÓN (LARAVEL) ---
             try {
-                const response = await fetch(`${API_URL}/login`, {
+                // 🌟 Ruta actualizada al mapeo de Laravel (8000)
+                const response = await fetch(`${API_BASE_URL}/login`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({
                         studentCode: formData.studentCode,
                         password: formData.password
@@ -82,7 +85,7 @@ const AuthContainer = () => {
 
                 const data = await response.json();
 
-                if (data.success) {
+                if (response.ok && (data.success || data.user)) {
                     // Guardamos el usuario en el contexto y sessionStorage
                     login(data.user);
                     navigate('/app');
@@ -90,23 +93,27 @@ const AuthContainer = () => {
                     alert(data.message || "Credenciales incorrectas.");
                 }
             } catch (err) {
-                alert("Error de conexión con el servidor MySQL local.");
+                alert("Error de conexión con el servidor Laravel.");
                 console.error("Error en login:", err);
             } finally {
                 setIsLoading(false);
             }
         } else {
-            // --- REGISTRO (PASO 1) ---
+            // --- REGISTRO PASO 1 (LARAVEL) ---
             try {
-                const response = await fetch(`${API_URL}/register`, {
+                // 🌟 Ruta actualizada al mapeo de Laravel (8000)
+                const response = await fetch(`${API_BASE_URL}/register`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify(formData)
                 });
 
                 const data = await response.json();
 
-                if (data.success) {
+                if (response.ok && (data.success || data.status === 'success')) {
                     // Guardamos el código para el siguiente paso del Onboarding
                     sessionStorage.setItem('pending_student_code', formData.studentCode);
                     navigate('/onboarding');
@@ -114,7 +121,7 @@ const AuthContainer = () => {
                     alert(data.message || "Error al crear la cuenta base.");
                 }
             } catch (err) {
-                alert("Error de conexión con el servidor MySQL local.");
+                alert("Error de conexión con el servidor Laravel.");
                 console.error("Error en registro:", err);
             } finally {
                 setIsLoading(false);
@@ -265,6 +272,16 @@ const AuthContainer = () => {
             </div>
 
             <style>{`
+                .bg-gradient-animate {
+                    background: linear-gradient(-45deg, #1e3a8a, #1e40af, #172554);
+                    background-size: 400% 400%;
+                    animation: gradient-move 15s ease infinite;
+                }
+                @keyframes gradient-move {
+                    0% { background-position: 0% 50%; }
+                    50% { background-position: 100% 50%; }
+                    100% { background-position: 0% 50%; }
+                }
                 .btn-fill { position: relative; z-index: 1; background: transparent; overflow: hidden; }
                 .btn-fill::before { 
                     content: ''; 

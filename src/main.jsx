@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
-import './index.css' // ¡Esta línea es la que hace la magia de los estilos!
+import './index.css' //
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>

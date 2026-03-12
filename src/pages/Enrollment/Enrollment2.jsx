@@ -1,8 +1,33 @@
 import React, { useState } from 'react';
 import { Book, CheckCircle, Plus, CheckSquare, Lock, X, GitBranch, ChevronDown, ChevronUp, Unlock, LogOut, Save, Loader2 } from 'lucide-react';
-import { dbMaterias, ROMANOS, DAYS, COLORS } from '../../mocks/data';
-import { usePensum } from '../../context/PensumContext';
-import { API_URL } from '../../config';
+
+// 🌟 IMPORTACIONES REALES (PARA TU PROYECTO LOCAL VITE)
+// ¡IMPORTANTE! Descomenta las líneas de abajo cuando lo pegues en tu código local:
+// import { dbMaterias, ROMANOS, DAYS, COLORS } from '../../mocks/data';
+// import { usePensum, API_BASE_URL } from '../../context/PensumContext';
+
+// 🛑 MOCK DE SEGURIDAD PARA LA VISTA PREVIA DEL NAVEGADOR
+// (Puedes borrar todo este bloque en tu proyecto local)
+const API_BASE_URL = 'http://localhost:8000/api';
+const ROMANOS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+const COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500', 'bg-teal-500'];
+const dbMaterias = [
+    { codigo: 'INF-101', nombre: 'Matemática I', semestre: 1, uc: 4, tipo: 'Obligatoria', mencion: 'Todas', prelacion: '' },
+    { codigo: 'INF-102', nombre: 'Programación I', semestre: 1, uc: 4, tipo: 'Obligatoria', mencion: 'Todas', prelacion: '' },
+    { codigo: 'INF-201', nombre: 'Matemática II', semestre: 2, uc: 4, tipo: 'Obligatoria', mencion: 'Todas', prelacion: 'INF-101' },
+    { codigo: 'INF-202', nombre: 'Programación II', semestre: 2, uc: 4, tipo: 'Obligatoria', mencion: 'Todas', prelacion: 'INF-102' },
+    { codigo: 'RED-301', nombre: 'Redes Básicas', semestre: 3, uc: 3, tipo: 'Obligatoria', mencion: 'Redes y Telecomunicaciones', prelacion: 'INF-202' }
+];
+const MockContext = React.createContext({
+    user: { code: '123456' },
+    materiasAprobadas: new Set(['INF-101']),
+    materiasInscritas: [],
+    setMateriasInscritas: () => {},
+    ucAprobadas: 4
+});
+const usePensum = () => React.useContext(MockContext);
+// 🛑 FIN DEL MOCK
 
 const Enrollment = () => {
     const {
@@ -89,9 +114,13 @@ const Enrollment = () => {
     const handleSaveEnrollment = async () => {
         setIsSaving(true);
         try {
-            const response = await fetch(`${API_URL}/enrollments`, {
+            // 🌟 RUTA 3: Guardar Inscripción (Actualizada a Laravel API)
+            const response = await fetch(`${API_BASE_URL}/enrollments`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json' // Cabecera obligatoria
+                },
                 body: JSON.stringify({
                     studentCode: user?.code,
                     period: '2026-I',
@@ -100,14 +129,14 @@ const Enrollment = () => {
             });
 
             const result = await response.json();
-            if (result.success) {
+            if (response.ok && (result.success || result.status === 'success')) {
                 showToast('¡Inscripción guardada exitosamente en la base de datos!', 'success');
             } else {
-                showToast('Hubo un error al guardar la inscripción', 'error');
+                showToast(result.message || 'Hubo un error al guardar la inscripción', 'error');
             }
         } catch (error) {
             console.error(error);
-            showToast('Error de conexión con el servidor MySQL', 'error');
+            showToast('Error de conexión con el servidor Laravel', 'error');
         } finally {
             setIsSaving(false);
         }
