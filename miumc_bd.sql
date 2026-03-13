@@ -14,6 +14,7 @@ USE miumc_db;
 -- 2. Tabla de Carreras
 CREATE TABLE IF NOT EXISTS careers (
                                        id INT AUTO_INCREMENT PRIMARY KEY,
+                                       code VARCHAR(100) NOT NULL UNIQUE,
                                        name VARCHAR(100) NOT NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB;
